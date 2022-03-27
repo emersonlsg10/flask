@@ -17,10 +17,25 @@ bp = Blueprint("blog", __name__)
 def index():
     """Show all the posts, most recent first."""
     db = get_db()
+
     posts = db.execute(
-        "SELECT p.id, title, body, created, author_id, username"
-        " FROM post p JOIN user u ON p.author_id = u.id"
+        # "SELECT p.id, title, body, created, author_id, username"
+        # " FROM post p"
+        # " JOIN user u ON p.author_id = u.id"
+        # " ORDER BY created DESC"
+
+        "SELECT *, l.author_id as love_author, count(distinct l.id)  as likes"
+        " FROM post p"
+        " LEFT JOIN user u ON p.author_id = u.id"
+        " LEFT JOIN love l ON p.id = l.post_id"
+        " GROUP BY p.id"
         " ORDER BY created DESC"
+
+        # "SELECT p.id, title, body, created, author_id, username, count(distinct love.id)"
+        # " FROM post p"
+        # " LEFT JOIN love on p.id=love.post_id"
+        # " JOIN user u ON p.author_id = u.id"
+        # " GROUP BY p.id"
     ).fetchall()
     return render_template("blog/index.html", posts=posts)
 
@@ -57,6 +72,17 @@ def get_post(id, check_author=True):
     return post
 
 
+def post_validation(title):
+    if not title:
+        return "Title is required."
+
+    if len(title) < 4:
+        return "Title name must be bigger than 4 letters."
+
+    if len(title) > 10:
+        return "Title cannot be bigger of 10 letters."
+
+
 @bp.route("/create", methods=("GET", "POST"))
 @login_required
 def create():
@@ -64,10 +90,7 @@ def create():
     if request.method == "POST":
         title = request.form["title"]
         body = request.form["body"]
-        error = None
-
-        if not title:
-            error = "Title is required."
+        error = post_validation(title)
 
         if error is not None:
             flash(error)
@@ -83,6 +106,70 @@ def create():
     return render_template("blog/create.html")
 
 
+@bp.route("/<int:id>/love", methods=["POST"])
+@login_required
+def love(id):
+    """Create a new post for the current user."""
+    db = get_db()
+    db.execute(
+        "INSERT INTO love (post_id, author_id) VALUES (?, ?)",
+        (id, g.user["id"]),
+    )
+    db.commit()
+    return redirect(url_for("blog.index"))
+
+
+@bp.route("/<int:id>/comment", methods=["POST"])
+@login_required
+def comment(id):
+    if request.method == "POST":
+        comment_text = request.form["comment_text"]
+        error = None
+
+        if not comment_text:
+            return "comment_text is required."
+
+        if error is not None:
+            flash(error)
+        else:
+            db = get_db()
+            db.execute(
+                "INSERT INTO comment (comment_text, post_id,  author_id) VALUES (?, ?, ?)",
+                (comment_text, id, g.user["id"]),
+            )
+            db.commit()
+            return redirect('details')
+
+
+@bp.route("/<int:id>/descomment", methods=["POST"])
+@login_required
+def descomment(id):
+    """Delete a comment."""
+    if request.method == "POST":
+        post_id = request.form["post_id"]
+        error = None
+
+        if error is not None:
+            flash(error)
+        else:
+            db = get_db()
+            db.execute("DELETE FROM comment WHERE id = ? AND author_id = ?",
+                (id, g.user["id"]))
+            db.commit()
+            return redirect(url_for("blog.index"))
+
+@bp.route("/<int:id>/deslove", methods=["POST"])
+@login_required
+def deslove(id):
+    """Delete a love."""
+    get_post(id)
+    db = get_db()
+    db.execute("DELETE FROM love WHERE post_id = ? AND author_id = ?",
+               (id, g.user["id"]))
+    db.commit()
+    return redirect(url_for("blog.index"))
+
+
 @bp.route("/<int:id>/update", methods=("GET", "POST"))
 @login_required
 def update(id):
@@ -92,22 +179,40 @@ def update(id):
     if request.method == "POST":
         title = request.form["title"]
         body = request.form["body"]
-        error = None
-
-        if not title:
-            error = "Title is required."
+        error = post_validation(title)
 
         if error is not None:
             flash(error)
         else:
             db = get_db()
             db.execute(
-                "UPDATE post SET title = ?, body = ? WHERE id = ?", (title, body, id)
+                "UPDATE post SET title = ?, body = ? WHERE id = ?", (
+                    title, body, id)
             )
             db.commit()
             return redirect(url_for("blog.index"))
 
     return render_template("blog/update.html", post=post)
+
+
+@bp.route("/<int:id>/details")
+@login_required
+def details(id):
+    """Update a post if the current user is the author."""
+    post = get_post(id)
+    
+    db = get_db()
+    comments = db.execute(
+        "SELECT *, u.id as comment_author"
+        " FROM comment c"
+        " LEFT JOIN user u ON c.author_id = u.id"
+        " WHERE c.post_id = ?"
+        " GROUP BY c.id"
+        " ORDER BY created DESC",
+        (id,)
+    ).fetchall()
+
+    return render_template("blog/details.html", post=post, comments=comments)
 
 
 @bp.route("/<int:id>/delete", methods=("POST",))

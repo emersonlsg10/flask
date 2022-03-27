@@ -58,6 +58,8 @@ def register():
 
         if not username:
             error = "Username is required."
+        elif len(username) < 4:
+            error = "User name must be bigger than 4 letters."
         elif not password:
             error = "Password is required."
 
@@ -71,7 +73,7 @@ def register():
             except db.IntegrityError:
                 # The username was already taken, which caused the
                 # commit to fail. Show a validation error.
-                error = f"User {username} is already registered."
+                error = f"User {username} is already registered..."
             else:
                 # Success, go to the login page.
                 return redirect(url_for("auth.login"))

@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block header %}
+  <h1>{% block title %}Edit "{{ post['title'] }}"{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+  <h1>Id {{ post['id'] }}</h1>
+  <br />
+  <h1>Title {{ post['title'] }}</h1>
+  <br />
+  <h1>Body</h1>
+  <h5>{{ post['body'] }}</h5>
+  <br />
+  <form action="{{ url_for('blog.comment', id=post['id']) }}" method="post">
+    <label for="title">Criar comentário</label>
+    <textarea name="comment_text" id="comment_text" required>{{ request.form['comment_text'] }}</textarea>
+    <input type="submit" value="Comentar">
+  </form>
+  <div>
+    <h4 for="title">Comentários</h4>
+    {% for comment in comments %}
+      <article class="post">
+        <div class="about">{{ comment['username'] }} - </div><p class="body">{{ comment['comment_text'] }}</p>
+      </article>
+      {% if g.user['id'] == comment['comment_author']  %}
+          <form action="{{ url_for('blog.descomment', id=comment['id']) }}" method="post">
+            <input class="danger" type="submit" value="Apagar">
+            <input type="hidden" name="post_id" id="post_id" value="{{ post['id'] }}">
+          </form>
+        {% endif %}
+      {% if not loop.last %}
+        <hr>
+      {% endif %}
+    {% endfor %}
+  </div>
+{% endblock %}
